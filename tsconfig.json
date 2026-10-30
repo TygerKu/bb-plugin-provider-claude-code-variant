@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@get-bb/plugin-sdk": ["node_modules/@get-bb/plugin-sdk/bundled-types/bb-plugin-sdk.d.ts"],
+      "@get-bb/plugin-sdk/*": ["node_modules/@get-bb/plugin-sdk/*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["server.ts", "src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

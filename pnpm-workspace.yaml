@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@get-bb/plugin-sdk@0.6.104'

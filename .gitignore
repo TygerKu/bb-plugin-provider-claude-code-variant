@@ -1,0 +1,10 @@
+# Windows thumbnail database
+Thumbs.db
+Desktop.ini
+
+# IDE settings
+.vscode/
+.idea/
+
+dist/
+node_modules/
