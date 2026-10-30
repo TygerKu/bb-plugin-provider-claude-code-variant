@@ -17,6 +17,7 @@ const EXECUTION_CONTEXT = {
   sandboxEnabled: false,
   fullAccessApprovalsEnabled: true,
   autoApprovePlans: true,
+  autoApprovePlansThreadScoped: true,
   memoryEnabled: false,
   providerSubagentsEnabled: false,
   instructions: "Session instructions",
@@ -80,6 +81,34 @@ const FULL_POLICY = {
 } satisfies RuntimePermissionPolicy;
 
 describe("buildClaudeSessionParams", () => {
+  it("lets explicit per-thread plan approval override the global default", () => {
+    const build = (sessionOptions: Record<string, boolean>) =>
+      buildClaudeSessionParams({
+        threadId: "thread-1",
+        cwd: "/tmp/worktree",
+        instructionMode: "append",
+        options: {
+          ...FULL_POLICY,
+          providerOptions: { autoApprovePlans: true },
+          sessionOptions,
+        },
+      }).autoApprovePlans;
+
+    expect(build({ autoApprovePlans: true })).toBe(true);
+    expect(build({ autoApprovePlans: false })).toBe(false);
+    expect(
+      buildClaudeSessionParams({
+        threadId: "thread-1",
+        cwd: "/tmp/worktree",
+        instructionMode: "append",
+        options: {
+          ...FULL_POLICY,
+          providerOptions: { autoApprovePlans: true },
+        },
+      }).autoApprovePlans,
+    ).toBe(true);
+  });
+
   it("maps every claude-flavored knob out of the providerOptions bag", () => {
     const params = buildClaudeSessionParams({
       threadId: "thread-1",
@@ -101,6 +130,7 @@ describe("buildClaudeSessionParams", () => {
       sandboxEnabled: false,
       fullAccessApprovalsEnabled: true,
       autoApprovePlans: true,
+      autoApprovePlansThreadScoped: false,
       memoryEnabled: false,
       providerSubagentsEnabled: false,
       model: "claude-sonnet-5",
@@ -309,6 +339,23 @@ describe("buildClaudeTurnParams", () => {
     expect(params.providerSubagentsEnabled).toBeUndefined();
     expect(params.permissionEscalation).toBeNull();
     expect(params).not.toHaveProperty("serviceTier");
+  });
+
+  it("uses the per-thread plan approval selection for Claude turns", () => {
+    const build = (autoApprovePlans: boolean, globalDefault: boolean) =>
+      buildClaudeTurnParams({
+        threadId: "thread-1",
+        providerThreadId: "provider-1",
+        input: [{ type: "text", text: "hi", mentions: [] }],
+        options: {
+          ...FULL_POLICY,
+          providerOptions: { autoApprovePlans: globalDefault },
+          sessionOptions: { autoApprovePlans },
+        },
+      }).autoApprovePlans;
+
+    expect(build(true, false)).toBe(true);
+    expect(build(false, true)).toBe(false);
   });
 
   it("forwards fast service tier to Claude turns", () => {

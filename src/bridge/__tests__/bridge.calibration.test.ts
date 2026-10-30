@@ -450,6 +450,7 @@ function lastTurnId(events: readonly ThreadEvent[]): string | undefined {
 
 const GOLDEN_EVENT_STREAM: string[] = [
   "thread/contextWindowUsage/updated",
+  "thread/extensionState/updated",
   "turn/started",
   "turn/input/accepted",
   "item/started:agentMessage",
