@@ -2681,14 +2681,41 @@ describe("bridge", () => {
           providerOptions: {
             workflowsEnabled: false,
             claudeCodePermissionMode: "plan",
-            autoApprovePlans: true,
+            autoApprovePlans: false,
           },
+          sessionOptions: { autoApprovePlans: true },
         },
       });
       await bridge.waitForResponse(1);
-
+      queries[0]?.emit({
+        type: "system",
+        subtype: "init",
+        apiKeySource: "none",
+        claude_code_version: "2.1.285",
+        cwd: "/tmp/worktree",
+        tools: [],
+        mcp_servers: [],
+        model: "claude-opus-5-5",
+        permissionMode: "default",
+        slash_commands: [],
+        output_style: "default",
+        skills: [],
+        plugins: [],
+        uuid: "00000000-0000-4000-8000-000000000001",
+        session_id: threadId,
+      });
+      await vi.waitFor(() => {
+        expect(
+          bridge.messages.some(
+            (message) =>
+              message.method === "thread/delta" &&
+              JSON.stringify(message.params).includes('"extensionKind":"bb/session-options"') &&
+              JSON.stringify(message.params).includes('"value":true'),
+          ),
+        ).toBe(true);
+      });
       const toolUseID = "tool-exit-plan-auto-approve";
-      const result = await getLastCanUseTool()(
+      const planResultPromise = getLastCanUseTool()(
         "ExitPlanMode",
         { plan: "# Plan\n\nDo the thing." },
         {
@@ -2697,6 +2724,7 @@ describe("bridge", () => {
           toolUseID,
         },
       );
+      const result = await planResultPromise;
 
       expect(result).toMatchObject({
         behavior: "allow",

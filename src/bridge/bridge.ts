@@ -275,6 +275,7 @@ interface ThreadAttachment {
   sessionConstructionConfig: SessionConstructionConfig;
   sessionOptions: SdkSessionOptions;
   closing: boolean;
+  publishedSessionOptions: string | null;
   residentSession: ThreadSession | null;
   permissionEscalation: PermissionEscalation | null;
   permissionMode: ClaudePermissionMode;
@@ -321,6 +322,7 @@ interface SessionConstructionConfig {
 interface ClaudeLiveSessionSettings {
   fullAccessApprovalsEnabled: boolean;
   autoApprovePlans: boolean;
+  autoApprovePlansThreadScoped: boolean;
   memoryEnabled: boolean;
   model?: string;
   providerSubagentsEnabled: boolean;
@@ -858,6 +860,15 @@ async function applyLiveSessionSettings(
 }
 
 const PROVIDER_CATALOG_MEMO_TTL_MS = 2 * 60_000;
+const THREAD_SESSION_OPTIONS_STATE_KIND = "bb/session-options";
+const AUTO_APPROVE_PLANS_OPTION_ID = "autoApprovePlans";
+const AUTO_APPROVE_PLANS_OPTION = {
+  id: AUTO_APPROVE_PLANS_OPTION_ID,
+  type: "boolean" as const,
+  label: "Automatically approve plans",
+  description: "Automatically approve Claude Code Plan proposals for this thread.",
+  value: false,
+};
 const listCommandsMemoized = createClaudeCodeBridgeCommandListMemo({
   ttlMs: PROVIDER_CATALOG_MEMO_TTL_MS,
 });
@@ -1079,6 +1090,7 @@ function toInitialLiveSessionSettings(
   return {
     fullAccessApprovalsEnabled: params.fullAccessApprovalsEnabled,
     autoApprovePlans: params.autoApprovePlans,
+    autoApprovePlansThreadScoped: params.autoApprovePlansThreadScoped,
     memoryEnabled: params.memoryEnabled ?? true,
     ...(params.model !== undefined ? { model: params.model } : {}),
     providerSubagentsEnabled: params.providerSubagentsEnabled ?? true,
@@ -1093,13 +1105,23 @@ function toInitialLiveSessionSettings(
 function withTurnLiveSessionSettings(
   current: ClaudeLiveSessionSettings,
   params: TurnStartParams | TurnSteerParams,
+  autoApprovePlans: boolean | undefined,
 ): ClaudeLiveSessionSettings {
   const model = params.model ?? current.model;
   const reasoningLevel = params.reasoningLevel ?? current.reasoningLevel;
   return {
     fullAccessApprovalsEnabled:
       params.fullAccessApprovalsEnabled ?? current.fullAccessApprovalsEnabled,
-    autoApprovePlans: params.autoApprovePlans ?? current.autoApprovePlans,
+    autoApprovePlans:
+      typeof autoApprovePlans === "boolean"
+        ? autoApprovePlans
+        : current.autoApprovePlansThreadScoped
+          ? current.autoApprovePlans
+          : params.autoApprovePlans ?? current.autoApprovePlans,
+    autoApprovePlansThreadScoped:
+      typeof autoApprovePlans === "boolean" ||
+      current.autoApprovePlansThreadScoped ||
+      Object.hasOwn(params, "autoApprovePlansThreadScoped"),
     memoryEnabled: params.memoryEnabled ?? current.memoryEnabled,
     ...(model !== undefined ? { model } : {}),
     providerSubagentsEnabled:
@@ -1131,6 +1153,7 @@ function createThreadAttachment(
     sessionConstructionConfig: args.sessionConstructionConfig,
     sessionOptions: args.sessionOptions,
     closing: false,
+    publishedSessionOptions: null,
     residentSession: null,
     permissionEscalation: args.permissionEscalation,
     permissionMode: args.permissionMode,
@@ -1560,6 +1583,30 @@ function getCurrentThreadSession(
   return threadSession;
 }
 
+function publishSessionOptions(
+  attachment: ThreadAttachment,
+  autoApprovePlans: boolean,
+): void {
+  if (attachment.closing) {
+    return;
+  }
+  const payload = {
+    options: [{ ...AUTO_APPROVE_PLANS_OPTION, value: autoApprovePlans }],
+  };
+  const serialized = JSON.stringify(payload);
+  if (attachment.publishedSessionOptions === serialized) {
+    return;
+  }
+  attachment.publishedSessionOptions = serialized;
+  sendThreadDeltas(attachment.threadIdRef.current, [
+    {
+      kind: "extension.state",
+      extensionKind: THREAD_SESSION_OPTIONS_STATE_KIND,
+      payload,
+    },
+  ]);
+}
+
 function publishProviderCommands(
   threadSession: ThreadSession,
   commands: unknown,
@@ -1638,6 +1685,10 @@ function createOnSdkMessage(
       message,
     });
     if (message.type === "system" && message.subtype === "init") {
+      publishSessionOptions(
+        threadSession.attachment,
+        threadSession.attachment.liveSettings.autoApprovePlans,
+      );
       refreshProviderCommands(threadSession);
     } else if (
       message.type === "system" &&
@@ -2620,26 +2671,38 @@ async function runTurnInput(
     sendError(id, -32000, "No active session");
     return;
   }
-
   if (!threadSession.session.canPushInput()) {
     sendError(id, -32000, "Claude SDK input stream is closed");
     return;
   }
   try {
-    await applyLiveSessionSettings(
-      threadSession,
-      params.threadId,
-      withTurnLiveSessionSettings(
-        threadSession.attachment.liveSettings,
-        params,
-      ),
-    );
-    await enterPlanModeIfRequested(threadSession, params);
+  const selectedAutoApprovePlans =
+    params.autoApprovePlansThreadScoped
+      ? params.autoApprovePlans
+      : threadSession.attachment.liveSettings.autoApprovePlansThreadScoped
+        ? threadSession.attachment.liveSettings.autoApprovePlans
+        : params.autoApprovePlans;
+  const nextLiveSettings = withTurnLiveSessionSettings(
+    threadSession.attachment.liveSettings,
+    params,
+    selectedAutoApprovePlans,
+  );
+  await applyLiveSessionSettings(
+    threadSession,
+    params.threadId,
+    nextLiveSettings,
+  );
+  await enterPlanModeIfRequested(threadSession, params);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     sendError(id, -32000, message);
     return;
   }
+
+  publishSessionOptions(
+    threadSession.attachment,
+    threadSession.attachment.liveSettings.autoApprovePlans,
+  );
 
   try {
     await pushPromptInput(
