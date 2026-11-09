@@ -284,7 +284,7 @@ async function replay(args: { workspaceDir: string }): Promise<ReplayResult> {
   let drained = 0;
   let providerThreadId = "calibration-session";
 
-  const collector = createBridgeDeltaEventCollector("claude-code");
+  const collector = createBridgeDeltaEventCollector("claude-code-variant");
   const collect = (): void => {
     for (const message of bridge.messages.slice(drained)) {
       events.push(...collector.assembleMessage(message));
@@ -448,6 +448,7 @@ function lastTurnId(events: readonly ThreadEvent[]): string | undefined {
 
 const GOLDEN_EVENT_STREAM: string[] = [
   "thread/contextWindowUsage/updated",
+  "thread/extensionState/updated",
   "turn/started",
   "turn/input/accepted",
   "item/started:agentMessage",

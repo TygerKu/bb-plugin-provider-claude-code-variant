@@ -80,6 +80,8 @@ export type ClaudeSessionExecutionOptions = RuntimePermissionPolicy & {
   sandboxEnabled: boolean;
   fullAccessApprovalsEnabled: boolean;
   commandDescriptionsEnabled: boolean;
+  autoApprovePlans: boolean;
+  autoApprovePlansThreadScoped: boolean;
   memoryEnabled?: boolean | undefined;
   providerSubagentsEnabled?: boolean | undefined;
   skillRoots?: readonly ClaudeCodeSkillRoot[] | undefined;
@@ -144,6 +146,8 @@ function buildInternalSessionParams(
     sandboxEnabled: args.options.sandboxEnabled,
     fullAccessApprovalsEnabled: args.options.fullAccessApprovalsEnabled,
     commandDescriptionsEnabled: args.options.commandDescriptionsEnabled,
+    autoApprovePlans: args.options.autoApprovePlans,
+    autoApprovePlansThreadScoped: args.options.autoApprovePlansThreadScoped,
     memoryEnabled: args.options.memoryEnabled,
     providerSubagentsEnabled: args.options.providerSubagentsEnabled,
     ...(dynamicTools && dynamicTools.length > 0 ? { dynamicTools } : {}),
@@ -160,6 +164,7 @@ const claudeProviderOptionsSchema = z
     sandboxEnabled: z.boolean().optional(),
     fullAccessApprovalsEnabled: z.boolean().optional(),
     commandDescriptionsEnabled: z.boolean().optional(),
+    autoApprovePlans: z.boolean().optional(),
     memoryEnabled: z.boolean().optional(),
     providerSubagentsEnabled: z.boolean().optional(),
     additionalWorkspaceWriteRoots: z.array(z.string()).optional(),
@@ -173,7 +178,22 @@ type ClaudeCanonicalExecutionOptions = RuntimePermissionPolicy & {
   instructions?: string | undefined;
   envVars?: Record<string, string> | undefined;
   providerOptions?: Record<string, unknown> | undefined;
+  sessionOptions?: Record<string, string | boolean> | undefined;
 };
+
+function resolveAutoApprovePlans(args: {
+  globalDefault: boolean | undefined;
+  sessionOptions: Record<string, string | boolean> | undefined;
+}): boolean {
+  const selected = args.sessionOptions?.autoApprovePlans;
+  return typeof selected === "boolean" ? selected : (args.globalDefault ?? false);
+}
+
+function hasAutoApprovePlansSelection(
+  sessionOptions: Record<string, string | boolean> | undefined,
+): boolean {
+  return Object.hasOwn(sessionOptions ?? {}, "autoApprovePlans");
+}
 
 interface BuildClaudeSessionParamsArgs {
   threadId: string;
@@ -211,6 +231,13 @@ export function buildClaudeSessionParams(
         providerOptions.fullAccessApprovalsEnabled ?? false,
       commandDescriptionsEnabled:
         providerOptions.commandDescriptionsEnabled ?? false,
+      autoApprovePlans: resolveAutoApprovePlans({
+        globalDefault: providerOptions.autoApprovePlans,
+        sessionOptions: args.options.sessionOptions,
+      }),
+      autoApprovePlansThreadScoped: hasAutoApprovePlansSelection(
+        args.options.sessionOptions,
+      ),
       memoryEnabled: providerOptions.memoryEnabled,
       providerSubagentsEnabled: providerOptions.providerSubagentsEnabled,
     },
@@ -269,6 +296,13 @@ export function buildClaudeTurnParams(
     sandboxEnabled: providerOptions.sandboxEnabled,
     fullAccessApprovalsEnabled: providerOptions.fullAccessApprovalsEnabled,
     commandDescriptionsEnabled: providerOptions.commandDescriptionsEnabled,
+    autoApprovePlans: resolveAutoApprovePlans({
+      globalDefault: providerOptions.autoApprovePlans,
+      sessionOptions: args.options.sessionOptions,
+    }),
+    autoApprovePlansThreadScoped: hasAutoApprovePlansSelection(
+      args.options.sessionOptions,
+    ),
     memoryEnabled: providerOptions.memoryEnabled,
     providerSubagentsEnabled: providerOptions.providerSubagentsEnabled,
     ...(config ? { config } : {}),

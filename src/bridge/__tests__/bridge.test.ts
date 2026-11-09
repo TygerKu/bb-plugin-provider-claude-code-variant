@@ -233,7 +233,7 @@ function getLatestQueryCall(): ClaudeQueryCall {
 }
 
 function getFailedTurns(messages: BridgeJsonRpcOutputMessage[]) {
-  return assembleCapturedThreadEvents(messages, "claude-code").filter(
+  return assembleCapturedThreadEvents(messages, "claude-code-variant").filter(
     (event) => event.type === "turn/completed" && event.status === "failed",
   );
 }
@@ -816,7 +816,7 @@ describe("bridge", () => {
           await vi.waitFor(() => {
             const events = assembleCapturedThreadEvents(
               bridge.messages,
-              "claude-code",
+              "claude-code-variant",
             );
             expect(
               events
@@ -837,7 +837,7 @@ describe("bridge", () => {
         await vi.waitFor(() => {
           const events = assembleCapturedThreadEvents(
             bridge.messages,
-            "claude-code",
+            "claude-code-variant",
           );
           if (delayed) {
             const usage = events
@@ -890,7 +890,7 @@ describe("bridge", () => {
         await vi.waitFor(() => {
           const events = assembleCapturedThreadEvents(
             bridge.messages,
-            "claude-code",
+            "claude-code-variant",
           );
           const usage = events
             .filter(
@@ -917,7 +917,7 @@ describe("bridge", () => {
         await vi.waitFor(() => {
           const usageEvents = assembleCapturedThreadEvents(
             bridge.messages,
-            "claude-code",
+            "claude-code-variant",
           ).filter(
             (event) => event.type === "thread/contextWindowUsage/updated",
           );
@@ -1009,7 +1009,7 @@ describe("bridge", () => {
       expect(reports[0].close).toHaveBeenCalledOnce();
       expect(reports).toHaveLength(2);
       expect(
-        assembleCapturedThreadEvents(bridge.messages, "claude-code").filter(
+        assembleCapturedThreadEvents(bridge.messages, "claude-code-variant").filter(
           (event) => event.type === "turn/completed",
         ),
       ).toHaveLength(2);
@@ -1047,7 +1047,7 @@ describe("bridge", () => {
     });
     const threadId = "thread-provider-commands";
     const providerCommandStates = () =>
-      assembleCapturedThreadEvents(bridge.messages, "claude-code").flatMap(
+      assembleCapturedThreadEvents(bridge.messages, "claude-code-variant").flatMap(
         (event) =>
           event.type === "thread/extensionState/updated" &&
           event.kind === "bb/provider-commands"
@@ -2643,6 +2643,93 @@ describe("bridge", () => {
         toolUseID,
         updatedInput,
       });
+
+      await stopBridgeThread({ bridge, queries, threadId });
+    } finally {
+      bridge.restore();
+    }
+  });
+
+  it("automatically approves ExitPlanMode when auto-approve plans is enabled", async () => {
+    const bridge = createBridgeJsonRpcTestHarness(handleLine);
+    const queries: ControlledClaudeQuery[] = [];
+    queryMock.mockImplementation(() => {
+      const query = createControlledClaudeQuery();
+      queries.push(query);
+      return query;
+    });
+
+    try {
+      const threadId = "thread-exit-plan-auto-approve";
+      bridge.sendRequest(1, "thread/start", {
+        threadId,
+        cwd: "/tmp/worktree",
+        instructionMode: "append",
+        options: {
+          permissionMode: "full",
+          permissionScope: "full",
+          approvalReviewer: null,
+          permissionEscalation: null,
+          instructions: "test",
+          providerOptions: {
+            workflowsEnabled: false,
+            claudeCodePermissionMode: "plan",
+            autoApprovePlans: false,
+          },
+          sessionOptions: { autoApprovePlans: true },
+        },
+      });
+      await bridge.waitForResponse(1);
+      queries[0]?.emit({
+        type: "system",
+        subtype: "init",
+        apiKeySource: "none",
+        claude_code_version: "2.1.285",
+        cwd: "/tmp/worktree",
+        tools: [],
+        mcp_servers: [],
+        model: "claude-opus-5-5",
+        permissionMode: "default",
+        slash_commands: [],
+        output_style: "default",
+        skills: [],
+        plugins: [],
+        uuid: "00000000-0000-4000-8000-000000000001",
+        session_id: threadId,
+      });
+      await vi.waitFor(() => {
+        expect(
+          bridge.messages.some(
+            (message) =>
+              message.method === "thread/delta" &&
+              JSON.stringify(message.params).includes('"extensionKind":"bb/session-options"') &&
+              JSON.stringify(message.params).includes('"value":true'),
+          ),
+        ).toBe(true);
+      });
+      const toolUseID = "tool-exit-plan-auto-approve";
+      const planResultPromise = getLastCanUseTool()(
+        "ExitPlanMode",
+        { plan: "# Plan\n\nDo the thing." },
+        {
+          requestId: "control-request",
+          signal: new AbortController().signal,
+          toolUseID,
+        },
+      );
+      const result = await planResultPromise;
+
+      expect(result).toMatchObject({
+        behavior: "allow",
+        updatedInput: { plan: "# Plan\n\nDo the thing." },
+        decisionClassification: "user_temporary",
+        toolUseID,
+      });
+      expect(bridge.messages.some(isApprovalInteraction)).toBe(false);
+      await bridge.flushWork();
+      expect(queries[0]?.setPermissionMode).toHaveBeenCalledWith(
+        "bypassPermissions",
+      );
 
       await stopBridgeThread({ bridge, queries, threadId });
     } finally {
@@ -5456,7 +5543,7 @@ describe("bridge", () => {
       await bridge.flushWork();
 
       expect(
-        assembleCapturedThreadEvents(bridge.messages, "claude-code").flatMap(
+        assembleCapturedThreadEvents(bridge.messages, "claude-code-variant").flatMap(
           (event) => {
             const item =
               event.type === "item/started" ||
@@ -5924,7 +6011,7 @@ describe("bridge", () => {
 
         expect(bridge.hasResponse(2)).toBe(false);
         expect(
-          assembleCapturedThreadEvents(bridge.messages, "claude-code").some(
+          assembleCapturedThreadEvents(bridge.messages, "claude-code-variant").some(
             (event) => event.type === "turn/started",
           ),
         ).toBe(false);
@@ -5937,7 +6024,7 @@ describe("bridge", () => {
 
         const events = assembleCapturedThreadEvents(
           bridge.messages,
-          "claude-code",
+          "claude-code-variant",
         );
         const started = events.find((event) => event.type === "turn/started");
         expect(started).toBeDefined();
@@ -5972,7 +6059,7 @@ describe("bridge", () => {
           await bridge.waitForResponse(3);
           const steered = assembleCapturedThreadEvents(
             bridge.messages,
-            "claude-code",
+            "claude-code-variant",
           );
           expect(
             steered.filter((event) => event.type === "turn/started"),
@@ -5990,7 +6077,7 @@ describe("bridge", () => {
         await stopBridgeThread({ bridge, queries, threadId });
         const stopped = assembleCapturedThreadEvents(
           bridge.messages,
-          "claude-code",
+          "claude-code-variant",
         );
         expect(stopped).toContainEqual(
           expect.objectContaining({
@@ -6495,7 +6582,7 @@ describe("canonical model context-window hint", () => {
 
       const contextWindowEvents = assembleCapturedThreadEvents(
         bridge.messages,
-        "claude-code",
+        "claude-code-variant",
       ).filter(
         (
           event,
@@ -6511,7 +6598,7 @@ describe("canonical model context-window hint", () => {
 
       const tokenUsageEvents = assembleCapturedThreadEvents(
         bridge.messages,
-        "claude-code",
+        "claude-code-variant",
       ).filter(
         (
           event,

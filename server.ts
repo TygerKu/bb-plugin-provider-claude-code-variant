@@ -67,11 +67,18 @@ export default function plugin(bb: BbPluginApi) {
         "Title Bash command rows with Claude's short description of the command instead of the command itself. Approval prompts still show the command. Takes effect from each thread's next message; existing rows keep their titles.",
       default: false,
     },
+    autoApprovePlans: {
+      type: "boolean",
+      label: "Automatically approve plans",
+      description:
+        "Automatically approve Claude Code Plan proposals and continue to execution. Only affects ExitPlanMode plan approvals; off by default.",
+      default: false,
+    },
   });
 
   bb.providers.register({
-    id: "claude-code",
-    displayName: "Claude Code",
+    id: "claude-code-variant",
+    displayName: "Claude Code Provider Variant",
     icon: "./icons/claude-code.svg",
     strings: {
       signInHint: "Run `claude` on the machine to sign in.",
@@ -135,6 +142,7 @@ export default function plugin(bb: BbPluginApi) {
           context.settings.fullAccessApprovalsEnabled === true,
         commandDescriptionsEnabled:
           context.settings.commandDescriptionsEnabled === true,
+        autoApprovePlans: context.settings.autoApprovePlans === true,
         ...(context.promptMode === "plan"
           ? { claudeCodePermissionMode: "plan" }
           : {}),

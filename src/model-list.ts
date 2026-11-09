@@ -67,6 +67,16 @@ function buildModel(
     reasoningDiscovery: "known",
     supportedReasoningEfforts,
     defaultReasoningEffort,
+    sessionOptions: [
+      {
+        id: "autoApprovePlans",
+        type: "boolean",
+        label: "Automatically approve plans",
+        description:
+          "Automatically approve Claude Code Plan proposals for this thread.",
+        value: false,
+      },
+    ],
     isDefault: false,
   };
 }

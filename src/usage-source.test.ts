@@ -13,7 +13,7 @@ import {
 
 it("publishes only its own maintenance providers without a display and only measures the requested resource", async () => {
   const collect = vi.fn(async () => ({
-    "claude-code": {
+    "claude-code-variant": {
       status: "ok" as const,
       accountEmail: "same@example.com",
       planLabel: "Custom subscription",
@@ -50,9 +50,9 @@ it("publishes only its own maintenance providers without a display and only meas
                   pluginId: "unrelated",
                 },
                 {
-                  id: "claude-code",
+                  id: "claude-code-variant",
                   displayName: "Custom",
-                  pluginId: "provider-claude-code",
+                  pluginId: "provider-claude-code-variant",
                 },
                 {
                   id: "another",
@@ -83,7 +83,7 @@ it("publishes only its own maintenance providers without a display and only meas
       "Usage resource no longer exists.",
     );
     await expect(read("online", "foreign")).rejects.toThrow("no longer exists");
-    expect(await read("online", "claude-code")).toMatchObject({
+    expect(await read("online", "claude-code-variant")).toMatchObject({
       accountKey: null,
       usage: {
         status: "ok",
@@ -94,25 +94,25 @@ it("publishes only its own maintenance providers without a display and only meas
     });
     expect(collect).toHaveBeenCalledWith({
       hostId: "online",
-      providerId: "claude-code",
+      providerId: "claude-code-variant",
       refresh: false,
     });
-    await read("online", "claude-code");
+    await read("online", "claude-code-variant");
     expect(collect).toHaveBeenCalledTimes(1);
-    await read("online", "claude-code", true);
+    await read("online", "claude-code-variant", true);
     expect(collect).toHaveBeenCalledTimes(2);
     expect(collect).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ refresh: true }),
     );
-    expect(await read("offline", "claude-code")).toMatchObject({
+    expect(await read("offline", "claude-code-variant")).toMatchObject({
       observedAt: null,
       usage: { status: "error" },
     });
     expect(collect).toHaveBeenCalledTimes(2);
     removed = true;
     expect((await list()).resources).toEqual([]);
-    await expect(read("online", "claude-code")).rejects.toThrow(
+    await expect(read("online", "claude-code-variant")).rejects.toThrow(
       "no longer exists",
     );
   } finally {
@@ -133,15 +133,15 @@ it("forwards validated provider-owned identity and normalization metadata while 
       providers: {
         list: async () => [
           {
-            id: "claude-code",
+            id: "claude-code-variant",
             displayName: "Custom",
-            pluginId: "provider-claude-code",
+            pluginId: "provider-claude-code-variant",
           },
         ],
       },
       system: {
         usageLimits: async () => ({
-          "claude-code": {
+          "claude-code-variant": {
             status: "ok",
             accountKey: "issuer:organization:123",
             accountEmail: "same@example.com",
@@ -165,7 +165,7 @@ it("forwards validated provider-owned identity and normalization metadata while 
     plugin(bb);
     const value = usageMeasurementSchema.parse(
       await harness.behavior.callRpc(usageFetchMethod, {
-        resourceId: JSON.stringify(["host", "claude-code"]),
+        resourceId: JSON.stringify(["host", "claude-code-variant"]),
         refresh: false,
       }),
     );
@@ -193,7 +193,7 @@ it("coalesces concurrent reads and makes a forced refresh wait for a fresh colle
   const collect = vi.fn(async () => {
     await gate;
     return {
-      "claude-code": {
+      "claude-code-variant": {
         status: "ok" as const,
         accountEmail: null,
         planLabel: null,
@@ -213,9 +213,9 @@ it("coalesces concurrent reads and makes a forced refresh wait for a fresh colle
       providers: {
         list: async () => [
           {
-            id: "claude-code",
+            id: "claude-code-variant",
             displayName: "Custom",
-            pluginId: "provider-claude-code",
+            pluginId: "provider-claude-code-variant",
           },
         ],
       },
@@ -226,7 +226,7 @@ it("coalesces concurrent reads and makes a forced refresh wait for a fresh colle
     plugin(bb);
     const read = (refresh: boolean) =>
       harness.behavior.callRpc(usageFetchMethod, {
-        resourceId: JSON.stringify(["host", "claude-code"]),
+        resourceId: JSON.stringify(["host", "claude-code-variant"]),
         refresh,
       });
     const first = read(false);

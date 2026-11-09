@@ -1,16 +1,16 @@
 {
-  "name": "bb-plugin-provider-claude-code",
-  "version": "0.1.0",
+  "name": "bb-plugin-provider-claude-code-variant",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Run bb threads with Claude Code.",
+  "description": "Run Claude Code threads with automatic Plan approval.",
   "engines": {
-    "bb": ">=0.0",
-    "bbPluginSdk": ">=0.6.86"
+    "bb": ">=0.49.0",
+    "bbPluginSdk": ">=0.6.132"
   },
   "bb": {
-    "name": "Claude Code provider",
-    "description": "Run bb threads with Claude Code.",
+    "name": "Claude Code Provider Variant",
+    "description": "Claude Code provider variant with optional automatic Plan approval.",
     "branding": {
       "icon": "./icons/claude-code.svg"
     },
@@ -19,8 +19,8 @@
     "experimental_providers": [
       {
         "kind": "agent",
-        "id": "claude-code",
-        "displayName": "Claude Code"
+        "id": "claude-code-variant",
+        "displayName": "Claude Code Provider Variant"
       }
     ]
   },
@@ -29,26 +29,22 @@
   ],
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
-    "typecheck": "tsrs --noEmit",
-    "lint": "oxlint --ignore-pattern node_modules --ignore-pattern dist .",
-    "prepare:bundled": "bb-plugin-build prepare-bundled"
+    "typecheck": "tsc6 --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
-    "@bb/plugin-build": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.20.5",
-    "better-sqlite3": "12.11.1",
-    "cron-parser": "^5.10.3",
-    "hono": "4.13.16",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^4.1.12"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.318",
-    "@get-bb/plugin-sdk": "workspace:*",
+    "@get-bb/plugin-sdk": "0.6.132",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-sqlite3": "12.11.1",
+    "cron-parser": "^5.10.3",
+    "hono": "4.13.16",
     "zod": "^4.6.7"
   }
 }

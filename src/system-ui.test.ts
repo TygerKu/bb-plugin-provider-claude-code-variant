@@ -48,7 +48,7 @@ describe("Claude plugin UI system pushes", () => {
         expect.objectContaining({
           type: "provider/unhandled",
           rawType: "sdk/system",
-          providerId: "claude-code",
+          providerId: "claude-code-variant",
           scope: threadScope(),
         }),
       ]);

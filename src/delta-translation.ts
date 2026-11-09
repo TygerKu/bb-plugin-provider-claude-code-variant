@@ -313,7 +313,7 @@ function normalizeClaudeRateLimits(
   const providerKey = info.rateLimitType ?? null;
 
   return {
-    providerId: "claude-code",
+    providerId: "claude-code-variant",
     status,
     kind:
       providerKey === "overage"

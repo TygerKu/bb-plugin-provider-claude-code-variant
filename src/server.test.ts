@@ -4,10 +4,10 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import claudeCodePlugin from "../server.js";
 
 function loadClaudeCodePlugin() {
-  const host = createFakePluginHost({ pluginId: "provider-claude-code" });
+  const host = createFakePluginHost({ pluginId: "provider-claude-code-variant" });
   claudeCodePlugin(host.bb);
   const declaration = host.harness.registrations.providerRegistrations.find(
-    (entry) => entry.id === "claude-code",
+    (entry) => entry.id === "claude-code-variant",
   );
   if (declaration === undefined) {
     throw new Error("expected Claude Code to be registered");
@@ -39,6 +39,7 @@ describe("the Claude Code provider settings", () => {
     "artifactsEnabled",
     "fullAccessApprovalsEnabled",
     "commandDescriptionsEnabled",
+    "autoApprovePlans",
   ])("keeps %s off by default and derives an explicit opt-in", (key) => {
     const { declaration, host } = loadClaudeCodePlugin();
 

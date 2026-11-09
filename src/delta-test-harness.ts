@@ -143,7 +143,7 @@ export function createClaudeDeltaHarness(
     commandDescriptionsEnabled: options.commandDescriptionsEnabled ?? false,
   });
   const assembler = createDeltaAssembler({
-    providerId: "claude-code",
+    providerId: "claude-code-variant",
     entropyPrefix: CLAUDE_TEST_ENTROPY,
     textDeltaFlushMs: 0,
   });

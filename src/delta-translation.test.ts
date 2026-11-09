@@ -1240,7 +1240,7 @@ describe("claude unhandled and ignored events", () => {
     expect(events).toEqual([
       expect.objectContaining({
         type: "provider/unhandled",
-        providerId: "claude-code",
+        providerId: "claude-code-variant",
         rawType: "sdk/custom_event",
         scope: threadScope(),
         rawEvent: expect.objectContaining({
@@ -1359,7 +1359,7 @@ describe("claude unhandled and ignored events", () => {
     expect(events).toEqual([
       expect.objectContaining({
         type: "provider/unhandled",
-        providerId: "claude-code",
+        providerId: "claude-code-variant",
         rawType: "sdk/result",
         scope: threadScope(),
         rawEvent: expect.objectContaining({
@@ -1987,7 +1987,7 @@ describe("claude error translation", () => {
         type: "provider/rateLimits/updated",
         scope: threadScope(),
         rateLimits: expect.objectContaining({
-          providerId: "claude-code",
+          providerId: "claude-code-variant",
           status: "allowed",
           windows: [
             expect.objectContaining({

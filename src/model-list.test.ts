@@ -84,6 +84,21 @@ describe("buildClaudeCodeModels", () => {
     ]);
   });
 
+  it("declares a per-thread plan approval toggle on reported models", () => {
+    const result = buildClaudeCodeModels(DISCOVERED_MODELS);
+
+    expect(result.models[0]?.sessionOptions).toEqual([
+      {
+        id: "autoApprovePlans",
+        type: "boolean",
+        label: "Automatically approve plans",
+        description:
+          "Automatically approve Claude Code Plan proposals for this thread.",
+        value: false,
+      },
+    ]);
+  });
+
   it("keeps Claude Code aliases selectable without listing them as models", () => {
     const result = buildClaudeCodeModels(DISCOVERED_MODELS);
 

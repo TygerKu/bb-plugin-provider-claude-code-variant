@@ -182,7 +182,7 @@ afterEach(() => {
 it("passes the canonical protocol suite against the scripted claude session", async () => {
   const report = await runBridgeConformance({
     transport: { send: handleLine, takeMessages: output.takeMessages },
-    providerId: "claude-code",
+    providerId: "claude-code-variant",
     session: {
       cwd: workspaceDir,
       promptInput: [{ type: "text", text: "say hello", mentions: [] }],

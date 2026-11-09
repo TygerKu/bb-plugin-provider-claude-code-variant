@@ -5,16 +5,22 @@ description: "Configure or troubleshoot BB-specific Claude Code provider setting
 
 # Claude Code provider
 
-Read settings with `bb plugin config provider-claude-code`; change a declared key
-with `bb plugin config provider-claude-code set <key> <value>`.
+Read settings with `bb plugin config provider-claude-code-variant`; change a declared key
+with `bb plugin config provider-claude-code-variant set <key> <value>`.
+
+- `autoApprovePlans` defaults to `false`. Enable it with
+  `bb plugin config provider-claude-code-variant set autoApprovePlans true` to
+  approve Claude Code Plan proposals and continue to execution. It only affects
+  `ExitPlanMode` plan approvals; it does not change other tool permissions. This
+  is currently a plugin-wide setting, not a per-thread picker option.
 
 - `subagentsDisabled` defaults to `false`. Enable with
-  `bb plugin config provider-claude-code set subagentsDisabled true` to remove
+  `bb plugin config provider-claude-code-variant set subagentsDisabled true` to remove
   native Agent, Task, and ListAgents tools from the model context. Changes
   restart Claude before the next turn, preserving the conversation. A deny hook
   also blocks native delegation during an active turn after disabling it.
 - `disable1MContext` defaults to `false`. Enable with
-  `bb plugin config provider-claude-code set disable1MContext true` to set
+  `bb plugin config provider-claude-code-variant set disable1MContext true` to set
   `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` (`0` when off). Changes restart the
   thread's Claude process before its next turn, preserving context.
 - `chromeEnabled` defaults to `false`. It starts Claude Code with `--chrome` for
@@ -22,7 +28,7 @@ with `bb plugin config provider-claude-code set <key> <value>`.
   A change restarts the thread's Claude process before its next turn, preserving
   context.
 - `artifactsEnabled` defaults to `false`. Enable with
-  `bb plugin config provider-claude-code set artifactsEnabled true` to set
+  `bb plugin config provider-claude-code-variant set artifactsEnabled true` to set
   `CLAUDE_CODE_ARTIFACT=1`, which gives threads Claude Code's `Artifact`,
   `ArtifactComments`, and `ArtifactData` tools for reading `claude.ai/artifact/`
   links and publishing pages. Claude Code withholds them from SDK sessions
