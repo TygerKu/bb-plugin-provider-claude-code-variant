@@ -62,4 +62,47 @@ describe("the Claude Code provider settings", () => {
       providerOptions(declaration, { sandboxEnabled: false }).sandboxEnabled,
     ).toBe(false);
   });
+
+  it("derives the context usage policy from its settings", () => {
+    const { declaration, host } = loadClaudeCodePlugin();
+    const descriptors = host.harness.registrations.settingsDescriptors;
+
+    expect(descriptors.contextUsageDetail).toMatchObject({
+      type: "select",
+      default: "auto",
+      options: ["auto", "summary"],
+    });
+    expect(descriptors.contextUsageRetryMinutes).toMatchObject({
+      type: "number",
+      default: 10,
+    });
+    expect(descriptors.contextUsageMaxAttempts).toMatchObject({
+      type: "number",
+      default: 0,
+    });
+
+    expect(providerOptions(declaration, {})).toMatchObject({
+      contextUsagePolicy: {
+        mode: "auto",
+        retryMs: 600_000,
+        maxAttempts: 0,
+      },
+    });
+    expect(
+      providerOptions(declaration, {
+        contextUsageDetail: "summary",
+        contextUsageRetryMinutes: 30,
+        contextUsageMaxAttempts: 3,
+      }),
+    ).toMatchObject({
+      contextUsagePolicy: {
+        mode: "summary",
+        retryMs: 1_800_000,
+        maxAttempts: 3,
+      },
+    });
+    expect(
+      providerOptions(declaration, { contextUsageRetryMinutes: 0 }),
+    ).toMatchObject({ contextUsagePolicy: { retryMs: 0 } });
+  });
 });

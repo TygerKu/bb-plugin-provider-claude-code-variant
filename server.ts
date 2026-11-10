@@ -1,6 +1,7 @@
 import { registerUsageSource } from "./src/usage-source.js";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { CLAUDE_NATIVE_ROOTS_DECLARATION } from "./src/native-roots.js";
+import { z } from "zod";
 
 export default function plugin(bb: BbPluginApi) {
   registerUsageSource(bb);
@@ -74,6 +75,34 @@ export default function plugin(bb: BbPluginApi) {
         "Automatically approve Claude Code Plan proposals and continue to execution. Only affects ExitPlanMode plan approvals; off by default.",
       default: false,
     },
+    contextUsageDetail: {
+      type: "select",
+      label: "Context usage detail",
+      description:
+        "Auto asks Claude for a per-category context breakdown and falls back to a summary when the gateway is slow. Summary never sends token-count requests, which is the right choice for third-party gateways that cannot answer them.",
+      options: ["auto", "summary"],
+      experimental_optionLabels: {
+        auto: "Auto (full breakdown, summary fallback)",
+        summary: "Summary only (no token-count requests)",
+      },
+      default: "auto",
+    },
+    contextUsageRetryMinutes: {
+      type: "number",
+      label: "Context breakdown retry interval",
+      description:
+        "Minutes to read summaries before trying the per-category breakdown again after it timed out. 0 retries on every turn.",
+      experimental_schema: z.number().int().min(0).max(10_080),
+      default: 10,
+    },
+    contextUsageMaxAttempts: {
+      type: "number",
+      label: "Context breakdown attempt limit",
+      description:
+        "How many times the per-category breakdown may time out for a model before this provider stops asking for it. 0 keeps retrying forever.",
+      experimental_schema: z.number().int().min(0).max(1_000),
+      default: 0,
+    },
   });
 
   bb.providers.register({
@@ -143,6 +172,15 @@ export default function plugin(bb: BbPluginApi) {
         commandDescriptionsEnabled:
           context.settings.commandDescriptionsEnabled === true,
         autoApprovePlans: context.settings.autoApprovePlans === true,
+        contextUsagePolicy: {
+          mode:
+            context.settings.contextUsageDetail === "summary"
+              ? "summary"
+              : "auto",
+          retryMs:
+            Number(context.settings.contextUsageRetryMinutes ?? 10) * 60_000,
+          maxAttempts: Number(context.settings.contextUsageMaxAttempts ?? 0),
+        },
         ...(context.promptMode === "plan"
           ? { claudeCodePermissionMode: "plan" }
           : {}),

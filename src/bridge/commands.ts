@@ -39,6 +39,12 @@ const bridgeClaudePluginsSchema = z
   .array(bridgeClaudeLocalPluginSchema)
   .optional();
 
+export const claudeContextUsagePolicySchema = z.object({
+  mode: z.enum(["auto", "summary"]).default("auto"),
+  retryMs: z.number().int().nonnegative().default(600_000),
+  maxAttempts: z.number().int().nonnegative().default(0),
+});
+
 export const claudeThreadStartParamsSchema = z.object({
   threadId: z.string(),
   cwd: z.string(),
@@ -62,6 +68,11 @@ export const claudeThreadStartParamsSchema = z.object({
   commandDescriptionsEnabled: z.boolean().optional(),
   autoApprovePlans: z.boolean().default(false),
   autoApprovePlansThreadScoped: z.boolean().default(false),
+  contextUsagePolicy: claudeContextUsagePolicySchema.default({
+    mode: "auto",
+    retryMs: 600_000,
+    maxAttempts: 0,
+  }),
   memoryEnabled: z.boolean().optional(),
   providerSubagentsEnabled: z.boolean().optional(),
   instructionMode: bridgeInstructionModeSchema,
@@ -97,6 +108,7 @@ export const claudeTurnStartParamsSchema = z.object({
   commandDescriptionsEnabled: z.boolean().optional(),
   autoApprovePlans: z.boolean().optional(),
   autoApprovePlansThreadScoped: z.boolean().optional(),
+  contextUsagePolicy: claudeContextUsagePolicySchema.optional(),
   memoryEnabled: z.boolean().optional(),
   providerSubagentsEnabled: z.boolean().optional(),
   config: z.record(z.string(), z.unknown()).optional(),

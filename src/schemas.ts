@@ -124,6 +124,13 @@ const contentBlockStartSchema = z
   })
   .passthrough();
 
+export const streamMessageDeltaSchema = z
+  .object({
+    type: z.literal("message_delta"),
+    usage: sdkUsageSchema.optional(),
+  })
+  .passthrough();
+
 export const streamEventSchema = z.union([
   contentBlockDeltaSchema,
   contentBlockStartSchema,

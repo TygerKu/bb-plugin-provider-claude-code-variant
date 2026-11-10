@@ -2,7 +2,10 @@
 
 import { experimental_selectedSkillMentions as selectedSkillMentions } from "@get-bb/plugin-sdk/provider-bridge";
 import { ClaudeContextUsageCollector } from "./context-usage.js";
-import { readIsolatedClaudeContextUsage } from "./context-usage-probe.js";
+import {
+  readIsolatedClaudeContextUsage,
+  type ClaudeContextUsagePolicy,
+} from "./context-usage-probe.js";
 
 import {
   type PendingInteractionGrantedPermissionProfile,
@@ -324,6 +327,7 @@ interface ClaudeLiveSessionSettings {
   fullAccessApprovalsEnabled: boolean;
   autoApprovePlans: boolean;
   autoApprovePlansThreadScoped: boolean;
+  contextUsagePolicy: ClaudeContextUsagePolicy;
   memoryEnabled: boolean;
   model?: string;
   providerSubagentsEnabled: boolean;
@@ -1096,6 +1100,7 @@ function toInitialLiveSessionSettings(
     fullAccessApprovalsEnabled: params.fullAccessApprovalsEnabled,
     autoApprovePlans: params.autoApprovePlans,
     autoApprovePlansThreadScoped: params.autoApprovePlansThreadScoped,
+    contextUsagePolicy: params.contextUsagePolicy,
     memoryEnabled: params.memoryEnabled ?? true,
     ...(params.model !== undefined ? { model: params.model } : {}),
     providerSubagentsEnabled: params.providerSubagentsEnabled ?? true,
@@ -1129,6 +1134,8 @@ function withTurnLiveSessionSettings(
       typeof autoApprovePlans === "boolean" ||
       current.autoApprovePlansThreadScoped ||
       Object.hasOwn(params, "autoApprovePlansThreadScoped"),
+    contextUsagePolicy:
+      params.contextUsagePolicy ?? current.contextUsagePolicy,
     memoryEnabled: params.memoryEnabled ?? current.memoryEnabled,
     ...(model !== undefined ? { model } : {}),
     providerSubagentsEnabled:
@@ -1731,6 +1738,8 @@ function createOnSdkMessage(
                 threadSession.attachment.sessionConstructionConfig
                   .dynamicTools ?? [],
               signal,
+              policy:
+                threadSession.attachment.liveSettings.contextUsagePolicy,
             }),
           providerSessionId: providerThreadId,
           isCurrent: () =>

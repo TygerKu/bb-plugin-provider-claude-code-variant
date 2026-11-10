@@ -70,6 +70,7 @@ import {
   extractClaudeContextWindowUsage,
   extractClaudeRequestContextTokens,
   extractClaudeResultTokenUsage,
+  extractClaudeStreamRequestContextTokens,
   extractStreamTextDelta,
   extractStreamThinkingDelta,
   extractThinkingBlocks,
@@ -882,7 +883,13 @@ export function createClaudeDeltaTranslator(
     }
     if (parentToolCallId === undefined) {
       const requestContextTokens = extractClaudeRequestContextTokens(message);
-      if (requestContextTokens !== null) {
+      if (
+        requestContextTokens !== null &&
+        !(
+          requestContextTokens === 0 &&
+          (state.latestRequestContextTokens ?? 0) > 0
+        )
+      ) {
         state.latestRequestContextTokens = requestContextTokens;
         deltas.push({
           kind: "contextWindow",
@@ -965,6 +972,23 @@ export function createClaudeDeltaTranslator(
       ? { parentRef: parentToolCallId }
       : {};
     const deltas: ThreadDelta[] = [];
+
+    if (parentToolCallId === undefined) {
+      const streamRequestContextTokens =
+        extractClaudeStreamRequestContextTokens(message);
+      if (streamRequestContextTokens !== null) {
+        state.latestRequestContextTokens = streamRequestContextTokens;
+        if (state.mirror.turnOpen) {
+          deltas.push({
+            kind: "contextWindow",
+            used: streamRequestContextTokens,
+            size: state.selectedModelContextWindow,
+            estimated: true,
+            attach: "open",
+          });
+        }
+      }
+    }
 
     const reasoningDelta = extractStreamThinkingDelta(message);
     if (reasoningDelta) {

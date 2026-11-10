@@ -584,4 +584,143 @@ describe("claude usage and fixture translation (delta path)", () => {
       }),
     );
   });
+
+  it("uses streamed message-delta usage when a gateway zeroes the assistant usage", () => {
+    const harness = createClaudeDeltaHarness();
+    const threadId = "bb-thread-1";
+    harness.translator.setClaudeModelContextWindowHint(threadId, "claude-opus-4-7[1m]");
+
+    harness.translate(
+      {
+        type: "stream_event",
+        event: {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 0,
+              output_tokens: 0,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          },
+        },
+      },
+      { threadId },
+    );
+    harness.translate(
+      {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "OK" },
+        },
+      },
+      { threadId },
+    );
+    const streamed = harness.translate(
+      {
+        type: "stream_event",
+        event: {
+          type: "message_delta",
+          usage: {
+            input_tokens: 709,
+            output_tokens: 5_086,
+            cache_read_input_tokens: 118_374,
+            cache_creation_input_tokens: 0,
+          },
+        },
+      },
+      { threadId },
+    );
+    expect(streamed).toContainEqual(
+      expect.objectContaining({
+        type: "thread/contextWindowUsage/updated",
+        contextWindowUsage: {
+          usedTokens: 119_083,
+          modelContextWindow: 1_000_000,
+          estimated: true,
+        },
+      }),
+    );
+
+    const assistant = harness.translate(
+      {
+        type: "assistant",
+        message: {
+          type: "message",
+          role: "assistant",
+          content: [],
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+          },
+        },
+        session_id: "session-1",
+      },
+      { threadId },
+    );
+    expect(assistant).not.toContainEqual(
+      expect.objectContaining({
+        type: "thread/contextWindowUsage/updated",
+        contextWindowUsage: expect.objectContaining({ usedTokens: 0 }),
+      }),
+    );
+
+    const completed = harness.translate(
+      {
+        type: "result",
+        subtype: "success",
+        duration_ms: 1,
+        duration_api_ms: 1,
+        is_error: false,
+        num_turns: 1,
+        result: "ok",
+        stop_reason: "end_turn",
+        total_cost_usd: 0,
+        usage: {
+          input_tokens: 709,
+          output_tokens: 5_086,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 118_374,
+        },
+        session_id: "session-1",
+      },
+      { threadId },
+    );
+    expect(completed).toContainEqual(
+      expect.objectContaining({
+        type: "thread/contextWindowUsage/updated",
+        contextWindowUsage: {
+          usedTokens: 119_083,
+          modelContextWindow: 1_000_000,
+          estimated: true,
+        },
+      }),
+    );
+  });
+
+  it("keeps official-API context usage when message deltas carry only output tokens", () => {
+    const harness = createClaudeDeltaHarness();
+    const threadId = "bb-thread-1";
+
+    harness.translate(loadFixture("assistant-text.json"), { threadId });
+    const streamed = harness.translate(
+      {
+        type: "stream_event",
+        event: {
+          type: "message_delta",
+          usage: { output_tokens: 42 },
+        },
+      },
+      { threadId },
+    );
+    expect(streamed).not.toContainEqual(
+      expect.objectContaining({
+        type: "thread/contextWindowUsage/updated",
+      }),
+    );
+  });
 });

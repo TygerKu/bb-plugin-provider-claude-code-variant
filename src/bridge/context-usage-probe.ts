@@ -14,11 +14,143 @@ async function* promptWithoutMessages(
   });
 }
 
+/**
+ * Some third-party Anthropic-compatible gateways answer the token-count API
+ * slowly or not at all, and the default full breakdown issues one token-count
+ * request per context category, so a gateway that cannot answer them turns a
+ * single read into dozens of failing requests. When a full read is still
+ * pending after this delay, read the summary alongside it instead.
+ */
+const FULL_CONTEXT_USAGE_FALLBACK_DELAY_MS = 3_000;
+
+/** How the context meter reads a breakdown for this provider. */
+export interface ClaudeContextUsagePolicy {
+  /** `auto` tries the full breakdown and falls back to the summary; `summary` never sends token-count requests. */
+  mode: "auto" | "summary";
+  /** How long to keep reading only summaries after a full read was too slow. */
+  retryMs: number;
+  /** Stop trying the full breakdown after this many slow reads; 0 keeps trying. */
+  maxAttempts: number;
+}
+
+export const DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY: ClaudeContextUsagePolicy = {
+  mode: "auto",
+  retryMs: 10 * 60_000,
+  maxAttempts: 0,
+};
+
+interface FullBreakdownState {
+  attempts: number;
+  retryAt: number;
+  disabled: boolean;
+  policyKey: string;
+}
+
+const fullBreakdownByModel = new Map<string, FullBreakdownState>();
+
+function policyKey(policy: ClaudeContextUsagePolicy): string {
+  return `${policy.retryMs}:${policy.maxAttempts}`;
+}
+
+/** Test seam: forget what earlier reads learned about each model. */
+export function resetClaudeContextUsagePolicyState(): void {
+  fullBreakdownByModel.clear();
+}
+
+function shouldSkipFullBreakdown(
+  model: string | undefined,
+  policy: ClaudeContextUsagePolicy,
+): boolean {
+  if (policy.mode === "summary") return true;
+  if (model === undefined) return false;
+  const state = fullBreakdownByModel.get(model);
+  if (state === undefined) return false;
+  if (state.policyKey !== policyKey(policy)) {
+    fullBreakdownByModel.delete(model);
+    return false;
+  }
+  if (state.disabled) return true;
+  return Date.now() < state.retryAt;
+}
+
+function recordFullBreakdownFailure(
+  model: string | undefined,
+  policy: ClaudeContextUsagePolicy,
+): void {
+  if (model === undefined) return;
+  const state = fullBreakdownByModel.get(model) ?? {
+    attempts: 0,
+    retryAt: 0,
+    disabled: false,
+    policyKey: policyKey(policy),
+  };
+  state.attempts += 1;
+  state.retryAt = Date.now() + policy.retryMs;
+  state.disabled =
+    policy.maxAttempts > 0 && state.attempts >= policy.maxAttempts;
+  fullBreakdownByModel.set(model, state);
+}
+
+function recordFullBreakdownSuccess(model: string | undefined): void {
+  if (model === undefined) return;
+  fullBreakdownByModel.delete(model);
+}
+
+type ContextUsageSession = {
+  getContextUsage: (options?: {
+    detail?: "summary" | "full";
+  }) => Promise<unknown>;
+};
+
+function readSummary(session: ContextUsageSession): Promise<unknown> {
+  return session.getContextUsage({ detail: "summary" });
+}
+
+export async function readClaudeContextUsageReport(
+  session: ContextUsageSession,
+  model: string | undefined,
+  policy: ClaudeContextUsagePolicy = DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY,
+): Promise<unknown> {
+  if (shouldSkipFullBreakdown(model, policy)) {
+    return readSummary(session);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let fallbackDue = (): void => {};
+  const slowFullRead = new Promise<"slow">((resolve) => {
+    fallbackDue = () => resolve("slow");
+    timer = setTimeout(fallbackDue, FULL_CONTEXT_USAGE_FALLBACK_DELAY_MS);
+    timer.unref();
+  });
+  const fullRead = session.getContextUsage();
+  fullRead.catch(() => undefined);
+  const settled = await Promise.race([
+    fullRead.then(
+      (value) => ({ answered: true as const, value }),
+      () => ({ answered: false as const, value: undefined }),
+    ),
+    slowFullRead,
+  ]).finally(() => {
+    clearTimeout(timer);
+    fallbackDue();
+  });
+  if (settled !== "slow" && settled.answered) {
+    recordFullBreakdownSuccess(model);
+    return settled.value;
+  }
+  recordFullBreakdownFailure(model, policy);
+  const summaryRead = readSummary(session);
+  summaryRead.catch(() => undefined);
+  return settled === "slow"
+    ? Promise.race([summaryRead, fullRead])
+    : summaryRead;
+}
+
 export async function readIsolatedClaudeContextUsage(args: {
   sessionOptions: SdkSessionOptions;
   providerSessionId: string;
   dynamicTools: DynamicTool[];
   signal: AbortSignal;
+  policy?: ClaudeContextUsagePolicy | undefined;
 }): Promise<unknown> {
   args.signal.throwIfAborted();
   const options = args.sessionOptions;
@@ -83,7 +215,11 @@ export async function readIsolatedClaudeContextUsage(args: {
       if (server && server.status !== "pending") return null;
       await delay(25, undefined, { signal: args.signal });
     }
-    return await session.getContextUsage();
+    return await readClaudeContextUsageReport(
+      session,
+      options.model,
+      args.policy ?? DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY,
+    );
   } finally {
     args.signal.removeEventListener("abort", close);
     close();

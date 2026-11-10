@@ -14,6 +14,7 @@ import {
   messageContentSchema,
   sdkUsageSchema,
   streamEventSchema,
+  streamMessageDeltaSchema,
   thinkingBlockSchema,
   toolResultBlockSchema,
   toolUseBlockSchema,
@@ -328,6 +329,33 @@ export function extractClaudeRequestContextTokens(
   }
 
   return toClaudeCurrentContextTokens(parsedMessage.data.usage);
+}
+
+/**
+ * Reads the prompt size the CLI reports on a streamed `message_delta`, as some
+ * gateways (for example third-party Anthropic-compatible APIs) zero out the
+ * `usage` of the buffered assistant message while still sending real counts on
+ * the streamed delta. The official API reports only output tokens there, so a
+ * delta that carries no input or cache counts stays unknown.
+ */
+export function extractClaudeStreamRequestContextTokens(
+  message: ClaudeStreamEventMessage,
+): number | null {
+  const parsed = streamMessageDeltaSchema.safeParse(message.event);
+  if (!parsed.success) {
+    return null;
+  }
+  const usage = parsed.data.usage;
+  if (
+    usage === undefined ||
+    (usage.input_tokens === undefined &&
+      usage.cache_read_input_tokens === undefined &&
+      usage.cache_creation_input_tokens === undefined)
+  ) {
+    return null;
+  }
+  const tokens = toClaudeCurrentContextTokens(usage) ?? 0;
+  return tokens > 0 ? tokens : null;
 }
 
 function toTokenUsageBreakdown(

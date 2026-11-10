@@ -83,6 +83,10 @@ Report: installed BB version, upstream tag and commit merged, conflicts resolved
 - Per-thread `autoApprovePlans` session option, labeled "Automatically approve plans", selectable in the model picker independently of the Fast service tier.
 - Global `autoApprovePlans` setting, off by default, used only as the fallback when a thread has no explicit selection.
 - The bridge publishes the resolved option through extension state and approves `ExitPlanMode` without prompting when it is on, then restores the approved plan's permission mode.
+- Context reporting works behind gateways that zero the assistant message's `usage` or cannot answer the token-count API:
+  - `src/sdk-extraction.ts` (`extractClaudeStreamRequestContextTokens`) reads prompt tokens from streamed `message_delta` usage when the buffered assistant message reports none.
+  - `src/bridge/context-usage-probe.ts` (`readClaudeContextUsageReport`) starts a `detail: "summary"` read when the default full breakdown is still pending after 3 seconds, so a gateway without a token-count endpoint still produces a snapshot.
+  - That probe is policy-driven: the `contextUsageDetail` (`auto` or `summary`), `contextUsageRetryMinutes`, and `contextUsageMaxAttempts` settings decide whether the per-category breakdown is tried, how long to keep reading summaries after it timed out, and when to stop trying it for a model. Keep the settings wired through `server.ts` -> `src/session-params.ts` -> `src/bridge/commands.ts` -> `liveSettings.contextUsagePolicy`.
 - Plugin and provider identities, display names, and the orange icon tint.
 
 Do not encode plan approval as a `serviceTier` value: a service tier is single-choice, which would make Fast and plan approval mutually exclusive.
@@ -95,3 +99,6 @@ Regression tests that must keep passing:
 4. It reaches the provider bridge and changes plan approval behavior.
 5. Fast can be selected at the same time.
 6. The global default still applies when a thread has no selection.
+7. Context usage is reported when the assistant message's `usage` is zeroed but streamed deltas carry real counts.
+8. Context usage falls back to the SDK summary read when the full breakdown is slow, and the official-API stream shape (output tokens only in `message_delta`) never overrides assistant usage.
+9. The context usage policy settings reach the probe: `summary` mode never sends token-count requests, a custom retry interval is honoured, and the attempt limit disables the full breakdown for that model.

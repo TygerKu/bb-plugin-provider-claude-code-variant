@@ -14,6 +14,7 @@ import {
   toClaudePermissionMode,
   type ClaudePermissionMode,
 } from "./interactive-contract.js";
+import type { ClaudeContextUsagePolicy } from "./bridge/context-usage-probe.js";
 
 interface AdditionalWorkspaceWriteRootsParams {
   additionalWorkspaceWriteRoots: string[];
@@ -80,11 +81,18 @@ export type ClaudeSessionExecutionOptions = RuntimePermissionPolicy & {
   sandboxEnabled: boolean;
   fullAccessApprovalsEnabled: boolean;
   commandDescriptionsEnabled: boolean;
+  contextUsagePolicy?: ClaudeContextUsagePolicy | undefined;
   autoApprovePlans: boolean;
   autoApprovePlansThreadScoped: boolean;
   memoryEnabled?: boolean | undefined;
   providerSubagentsEnabled?: boolean | undefined;
   skillRoots?: readonly ClaudeCodeSkillRoot[] | undefined;
+};
+
+export const DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY: ClaudeContextUsagePolicy = {
+  mode: "auto",
+  retryMs: 600_000,
+  maxAttempts: 0,
 };
 
 function resolveClaudeSessionPermissionMode(
@@ -146,6 +154,8 @@ function buildInternalSessionParams(
     sandboxEnabled: args.options.sandboxEnabled,
     fullAccessApprovalsEnabled: args.options.fullAccessApprovalsEnabled,
     commandDescriptionsEnabled: args.options.commandDescriptionsEnabled,
+    contextUsagePolicy:
+      args.options.contextUsagePolicy ?? DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY,
     autoApprovePlans: args.options.autoApprovePlans,
     autoApprovePlansThreadScoped: args.options.autoApprovePlansThreadScoped,
     memoryEnabled: args.options.memoryEnabled,
@@ -164,6 +174,13 @@ const claudeProviderOptionsSchema = z
     sandboxEnabled: z.boolean().optional(),
     fullAccessApprovalsEnabled: z.boolean().optional(),
     commandDescriptionsEnabled: z.boolean().optional(),
+    contextUsagePolicy: z
+      .object({
+        mode: z.enum(["auto", "summary"]),
+        retryMs: z.number(),
+        maxAttempts: z.number(),
+      })
+      .optional(),
     autoApprovePlans: z.boolean().optional(),
     memoryEnabled: z.boolean().optional(),
     providerSubagentsEnabled: z.boolean().optional(),
@@ -231,6 +248,9 @@ export function buildClaudeSessionParams(
         providerOptions.fullAccessApprovalsEnabled ?? false,
       commandDescriptionsEnabled:
         providerOptions.commandDescriptionsEnabled ?? false,
+      contextUsagePolicy:
+        providerOptions.contextUsagePolicy ??
+        DEFAULT_CLAUDE_CONTEXT_USAGE_POLICY,
       autoApprovePlans: resolveAutoApprovePlans({
         globalDefault: providerOptions.autoApprovePlans,
         sessionOptions: args.options.sessionOptions,
@@ -296,6 +316,7 @@ export function buildClaudeTurnParams(
     sandboxEnabled: providerOptions.sandboxEnabled,
     fullAccessApprovalsEnabled: providerOptions.fullAccessApprovalsEnabled,
     commandDescriptionsEnabled: providerOptions.commandDescriptionsEnabled,
+    contextUsagePolicy: providerOptions.contextUsagePolicy,
     autoApprovePlans: resolveAutoApprovePlans({
       globalDefault: providerOptions.autoApprovePlans,
       sessionOptions: args.options.sessionOptions,
