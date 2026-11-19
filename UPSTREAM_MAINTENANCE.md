@@ -38,13 +38,15 @@ git status --short --branch         # must be clean; never sync from a dirty tre
 git fetch origin --tags
 
 # 2. Refresh the mirrored history at the chosen release
+#    A split of the whole monorepo takes several minutes and can exceed a
+#    5-minute command timeout, so run it in the background and poll for the ref.
 git branch -D provider-sync 2>/dev/null
-git subtree split --prefix=plugins/provider-claude-code desktop-v0.49.0 -b provider-sync
+git subtree split --prefix=plugins/provider-claude-code desktop-v0.50.1 -b provider-sync
 
 # 3. Bring it into the fork
 cd ../bb-plugin-provider-claude-code-variant
 git fetch ../bb-upstream provider-sync:refs/heads/upstream/provider-claude-code
-git tag -a upstream-desktop-v0.49.0 -m "Official provider-claude-code at bb desktop-v0.49.0" upstream/provider-claude-code
+git tag -a upstream-desktop-v0.50.1 -m "Official provider-claude-code at bb desktop-v0.50.1" upstream/provider-claude-code
 
 # 4. Merge upstream into the feature layer
 git merge upstream/provider-claude-code
@@ -53,6 +55,14 @@ git merge upstream/provider-claude-code
 `git subtree split` is deterministic for the same upstream tree, so a re-split produces the same commits and the merge stays a fast-forward or a small three-way merge.
 
 If the upstream checkout is dirty, do not pull, merge, rebase, stash, or modify it. Clone a fresh checkout in a new, empty sibling directory instead.
+
+While the split runs, review the merge ahead of time instead of idling: `git diff --stat <old-tag>..<new-tag> -- plugins/provider-claude-code` lists the incoming files, and `git diff <old-tag>..<new-tag> -- <file>` shows each change. Compare that list against `git diff upstream/provider-claude-code..master --stat` to see which incoming files the fork has already modified; those are the likely conflict sites.
+
+## Syncs performed
+
+| Date | bb version | Upstream tag | Merge commit | Conflicts | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 2026-11-19 | 0.50.1 | `desktop-v0.50.1` | see `git log` | `package.json` | First sync under the subtree workflow. See "Lessons from the 0.50.1 sync". |
 
 ## Resolving merge conflicts
 
@@ -76,7 +86,25 @@ bb plugin types . --check
 
 All four must pass. `bb plugin types --check` must report that the pinned `@get-bb/plugin-sdk` matches the host; a "legacy vendored SDK layout" warning means the `tsconfig.json` `paths` mapping was reintroduced and must be removed.
 
+The expected test count grows with upstream's own test additions, so a passing count that is higher than the previous sync's is normal. A count that *drops* is the signal to investigate.
+
 Report: installed BB version, upstream tag and commit merged, conflicts resolved and how, fork features verified, and each command's result.
+
+## Lessons from the 0.50.1 sync
+
+Recorded because this was the first sync using the subtree workflow; keep adding to this list as later syncs turn up new traps.
+
+1. **The SDK pin is a version bump, not an edit.** `@get-bb/plugin-sdk` is pinned to an exact version in `package.json`, and the declaration files ship inside the package. After a bb update, `bb plugin types . --check` reports the mismatch (it said `pin is 0.6.132, host is 0.6.157`). Bump the pin, the `bbPluginSdk` engine field, and the `bb` engine field together, then run `npm install` before typechecking. The upstream `package.json` always says `workspace:*` here, so its value is never the right one to take.
+
+2. **`package.json` conflicts on the `scripts` block, and upstream's scripts do not apply.** Upstream adds `typecheck: "tsrs --noEmit"`, `lint:type-aware`, `lint`, and `prepare:bundled`, and upstream also moves `better-sqlite3`, `cron-parser`, and `hono` from `devDependencies` to `dependencies`. In this standalone checkout those scripts reference a monorepo root (`../../.oxlintrc.type-aware.json`, the `tsrs` and `bb-plugin-build` workspace packages) that does not exist, and `typecheck` stays `tsc6 --noEmit -p tsconfig.json`. Resolve by keeping the fork's script block and the fork's dependency layout, and take nothing else from that hunk.
+
+3. **Auto-merge succeeds where the same function gained both an upstream and a fork parameter.** `emitCanonicalTurnInputAccepted` gained upstream's `promptId` argument (for prompt-consumption tracking) in the same region the fork adds `publishSessionOptions`. Git merged it cleanly, but a clean auto-merge is not evidence of correctness: read the merged function and confirm both changes are wired, that every call site passes the new argument, and that the fork's field is still set before it is read.
+
+4. **Upstream touched every file the fork had already modified for context reporting.** `src/bridge/context-usage-probe.ts`, `src/initialization-probe.ts`, `src/schemas.ts`, and `src/delta-translation.ts` all appear in the incoming diff, and all merged without conflict. Verify the fork's additions by grep after the merge rather than trusting the "Auto-merging" lines: the probe must still import `managed-mcp-config.js` *and* still export `ClaudeContextUsagePolicy`, and `schemas.ts` must contain both `streamMessageDeltaSchema` and `user_message_uuids`. A merge that silently drops one side still typechecks when the dropped side was additive.
+
+5. **`bb plugin install .` refuses to run unattended.** It is full-trust code, so it exits without installing unless given `--yes`. Pass `--yes` to complete the install check; it does not change the rule that the user runs end-to-end testing.
+
+6. **Do not run `npm test` output through a tail that hides the summary.** The bridge logs JSON-RPC noise to stdout during tests, so the pass/fail summary scrolls away. Read the last lines, where vitest prints `Test Files` and `Tests` counts, and report both numbers.
 
 ## Fork features to preserve
 
